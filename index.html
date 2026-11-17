@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Almacén y Ventas - Grupo 502</title>
+    <style>
+        body { font-family: system-ui, sans-serif; background: #f0f2f5; margin: 0; padding: 15px; color: #222; }
+        .card { max-width: 700px; margin: auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        h2 { color: #004085; text-align: center; margin-top: 0; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 12px; }
+        label { display: block; font-size: 12px; font-weight: bold; margin-bottom: 4px; }
+        input { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        button { padding: 10px 15px; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; color: #fff; }
+        .btn-primary { background: #004085; width: 100%; }
+        .btn-primary:hover { background: #002752; }
+        .btn-sell { background: #28a745; padding: 5px 8px; font-size: 12px; }
+        .btn-del { background: #dc3545; padding: 5px 8px; font-size: 12px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 13px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background: #004085; color: white; }
+        .low-stock { background: #fff3cd; color: #856404; font-weight: bold; }
+        .resumen { background: #e9ecef; padding: 10px; border-radius: 4px; margin-top: 15px; display: flex; justify-content: space-between; font-weight: bold; font-size: 14px; }
+        #panelPrincipal { display: none; }
+    </style>
+</head>
+<body>
+
+    <!-- PANTALLA DE ACCESO -->
+    <div class="card" id="panelLogin" style="max-width: 380px; margin-top: 40px;">
+        <h2>🔐 Acceso al Almacén</h2>
+        <p style="font-size: 13px; color: #555; text-align: center;">Clave de acceso: <strong>cecytec2026</strong></p>
+        <input type="password" id="txtClave" placeholder="Ingrese clave del sistema">
+        <button class="btn-primary" style="margin-top: 10px;" onclick="validarAcceso()">Ingresar</button>
+    </div>
+
+    <!-- PANEL PRINCIPAL DEL SISTEMA -->
+    <div class="card" id="panelPrincipal">
+        <h2>📦 Control de Inventario y Ventas</h2>
+        
+        <div class="grid">
+            <div>
+                <label>Código / SKU:</label>
+                <input type="text" id="sku" placeholder="Ej. PROD-01">
+            </div>
+            <div>
+                <label>Producto:</label>
+                <input type="text" id="nombre" placeholder="Ej. Teclado USB">
+            </div>
+            <div>
+                <label>Precio Venta ($):</label>
+                <input type="number" id="precio" min="1" step="0.5" placeholder="0.00">
+            </div>
+            <div>
+                <label>Stock Inicial:</label>
+                <input type="number" id="stock" min="1" placeholder="0">
+            </div>
+        </div>
+
+        <button class="btn-primary" onclick="agregarProducto()">+ Registrar Producto en Inventario</button>
+
+        <div class="resumen">
+            <span>Productos Registrados: <span id="totalProds">0</span></span>
+            <span>Ingresos por Ventas: $<span id="totalVentas">0.00</span></span>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>SKU</th>
+                    <th>Producto</th>
+                    <th>Precio</th>
+                    <th>Stock</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody id="tablaInventario"></tbody>
+        </table>
+    </div>
+
+    <script>
+        let ventasAcumuladas = parseFloat(localStorage.getItem("ventas_502")) || 0;
+
+        function validarAcceso() {
+            const clave = document.getElementById("txtClave").value.trim();
+            if (clave === "cecytec2026") {
+                document.getElementById("panelLogin").style.display = "none";
+                document.getElementById("panelPrincipal").style.display = "block";
+                renderizar();
+            } else {
+                alert("❌ Clave incorrecta. Intente de nuevo.");
+            }
+        }
+
+        function obtenerInventario() {
+            return JSON.parse(localStorage.getItem("inv_502")) || [];
+        }
+
+        function guardarInventario(lista) {
+            localStorage.setItem("inv_502", JSON.stringify(lista));
+        }
+
+        function agregarProducto() {
+            const sku = document.getElementById("sku").value.trim().toUpperCase();
+            const nombre = document.getElementById("nombre").value.trim();
+            const precio = parseFloat(document.getElementById("precio").value);
+            const stock = parseInt(document.getElementById("stock").value);
+
+            if (!sku || !nombre || isNaN(precio) || isNaN(stock) || precio <= 0 || stock <= 0) {
+                alert("Complete todos los campos con valores positivos.");
+                return;
+            }
+
+            let inv = obtenerInventario();
+            const existe = inv.find(p => p.sku === sku);
+
+            if (existe) {
+                existe.stock += stock;
+                existe.precio = precio;
+            } else {
+                inv.push({ sku, nombre, precio, stock });
+            }
+
+            guardarInventario(inv);
+            document.getElementById("sku").value = "";
+            document.getElementById("nombre").value = "";
+            document.getElementById("precio").value = "";
+            document.getElementById("stock").value = "";
+            renderizar();
+        }
+
+        function venderUnidad(index) {
+            let inv = obtenerInventario();
+            if (inv[index].stock > 0) {
+                inv[index].stock -= 1;
+                ventasAcumuladas += inv[index].precio;
+                localStorage.setItem("ventas_502", ventasAcumuladas.toFixed(2));
+                guardarInventario(inv);
+                renderizar();
+            } else {
+                alert("⚠️ Producto agotado.");
+            }
+        }
+
+        function eliminarProducto(index) {
+            if (confirm("¿Eliminar este producto del catálogo?")) {
+                let inv = obtenerInventario();
+                inv.splice(index, 1);
+                guardarInventario(inv);
+                renderizar();
+            }
+        }
+
+        function renderizar() {
+            const inv = obtenerInventario();
+            const tbody = document.getElementById("tablaInventario");
+            tbody.innerHTML = "";
+
+            if (inv.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:#777;">Sin productos en almacén.</td></tr>`;
+            } else {
+                inv.forEach((p, idx) => {
+                    const claseAlerta = p.stock <= 3 ? "low-stock" : "";
+                    tbody.innerHTML += `
+                        <tr class="${claseAlerta}">
+                            <td><strong>${p.sku}</strong></td>
+                            <td>${p.nombre}</td>
+                            <td>$${p.precio.toFixed(2)}</td>
+                            <td>${p.stock} u. ${p.stock <= 3 ? '(Bajo)' : ''}</td>
+                            <td>
+                                <button class="btn-sell" onclick="venderUnidad(${idx})">Vender 1</button>
+                                <button class="btn-del" onclick="eliminarProducto(${idx})">X</button>
+                            </td>
+                        </tr>
+                    `;
+                });
+            }
+
+            document.getElementById("totalProds").innerText = inv.length;
+            document.getElementById("totalVentas").innerText = ventasAcumuladas.toFixed(2);
+        }
+    </script>
+</body>
+</html>
